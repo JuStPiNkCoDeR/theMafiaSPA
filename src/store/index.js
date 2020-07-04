@@ -3,7 +3,7 @@
 
 import Vue from 'vue'
 import Vuex from 'vuex'
-import { generateKeyPair, getPEM } from '@/utils/RSA';
+import {generateKeyPair, getPEM, importKey} from '@/utils/RSA';
 
 Vue.use(Vuex)
 
@@ -45,12 +45,19 @@ export default new Vuex.Store({
          */
         pemPSS: null,
         /**
-         * @description Server public key
+         * @description Server OAEP public key
          *              usage: encode outgoing data
          *
          * @type {CryptoKey|null}
          */
-        foreignPublicKey: null,
+        foreignPublicKeyOAEP: null,
+        /**
+         * @description Server PSS public key
+         *              usage: verify signatures
+         *
+         * @type {CryptoKey|null}
+         */
+        foreignPublicKeyPSS: null,
       },
       mutations: {
         /**
@@ -85,8 +92,15 @@ export default new Vuex.Store({
          * @param state
          * @param {CryptoKey|null} payload
          */
-        setForeignPublicKey(state, payload) {
-          state.foreignPublicKey = payload;
+        setForeignPublicKeyOAEP(state, payload) {
+          state.foreignPublicKeyOAEP = payload;
+        },
+        /**
+         * @param state
+         * @param {CryptoKey|null} payload
+         */
+        setForeignPublicKeyPSS(state, payload) {
+          state.foreignPublicKeyPSS = payload;
         }
       },
       actions: {
@@ -101,7 +115,20 @@ export default new Vuex.Store({
           commit('setKeyPairPSS', keysPSS);
           commit('setPemPSS', pemPSS);
         },
-      }
+        /**
+         *
+         * @param commit
+         * @param {{oaep: string, pss: string}} PEMs
+         * @return {Promise<void>}
+         */
+        async reproduceForeignPublicKeysFromPEM({ commit }, PEMs) {
+          const keyOAEP = await importKey(PEMs.oaep, 'RSA-OAEP', ['encrypt']);
+          commit('setForeignPublicKeyOAEP', keyOAEP);
+
+          const keyPSS = await importKey(PEMs.pss, 'RSA-PSS', ['verify']);
+          commit('setForeignPublicKeyPSS', keyPSS);
+        }
+      },
     }
   }
 })

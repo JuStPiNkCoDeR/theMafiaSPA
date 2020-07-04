@@ -10,7 +10,7 @@
         <input type="password" :placeholder="$ml.get('passwordPlaceholder')">
       </label>
       <div id="button-field">
-        <button>{{ $ml.get('signUp') }}</button>
+        <button @click="signIn">{{ $ml.get('signUp') }}</button>
         <button>{{ $ml.get('signIn') }}</button>
       </div>
     </form>
@@ -19,30 +19,55 @@
 
 <script>
   import Socket from '@/utils/socket';
-  import { generateKeyPair, getPEM } from '@/utils/RSA';
+  import {importKey} from "@/utils/RSA";
 
-  const sock = new Socket();
-  let foreignPEM;
+  export default {
+      name: 'Home',
+      methods: {
+          async signIn(event) {
+              event.preventDefault();
 
-  sock.on('connect', () => {
-      sock.emit('rsa:getKey', '');
-  });
+              await this.$store.dispatch('secure/generateAllKeyPair');
 
-  sock.on('rsa:publicKey', async (data) => {
-      foreignPEM = data;
-      console.log(foreignPEM);
+              const sock = new Socket();
+              let foreignPemOAEP, foreignPemPSS;
 
-      const keys = await generateKeyPair();
-      const pem = await getPEM(keys);
+              sock.on('connect', () => {
+                  sock.emit('rsa:getServerKeys', '');
+              });
 
-      sock.emit('rsa:sendKeyOAEP', pem);
-  });
+              sock.on('rsa:serverKeys', async (data) => {
+                  console.log(data)
+                  foreignPemOAEP = data['OAEP'];
+                  foreignPemPSS = data['PSS'];
 
-  sock.init('secure');
+                  try {
+                      const keyOAEP = await importKey(foreignPemOAEP, 'RSA-OAEP', ['encrypt']);
 
-export default {
-  name: 'Home',
-}
+                      const keyPSS = await importKey(foreignPemPSS, 'RSA-PSS', ['verify']);
+
+                      console.log(keyOAEP);
+                      console.log(keyPSS);
+                  } catch (e) {
+                      console.error(e);
+                  }
+
+                  // try {
+                  //     await this.$store.dispatch('secure/reproduceForeignPublicKeysFromPEM', {
+                  //         oaep: foreignPemOAEP,
+                  //         pss: foreignPemPSS,
+                  //     });
+                  //
+                  //     sock.emit('rsa:setClientKeys', this.$store.state.secure.pemOAEP);
+                  // } catch (e) {
+                  //     console.error(e);
+                  // }
+              });
+
+              sock.init('secure');
+          }
+      }
+  }
 
 </script>
 

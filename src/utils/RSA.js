@@ -48,23 +48,30 @@ function removeLines(pem) {
  * @description From PEM string produce key of type CryptoKey
  *
  * @param {string} pem
+ * @param {"RSA-OAEP"|"RSA-PSS"} algorithm
+ * @param {string[]} usage
  * @returns {Promise<CryptoKey>}
  */
-async function importKey(pem) {
+export async function importKey(pem, algorithm, usage) {
     const keyPEM = removeLines(pem);
     const keyBuffer = stringToArrayBuffer(keyPEM);
-    const key = await window.crypto.subtle.importKey(
-        'pkcs8',
-        keyBuffer,
-        {
-            name: 'RSA-OAEP',
-            hash: { name: 'SHA-256' },
-        },
-        true,
-        ['encrypt'],
-    );
 
-    return key;
+    try {
+        const key = await window.crypto.subtle.importKey(
+            'spki',
+            keyBuffer,
+            {
+                name: algorithm,
+                hash: { name: 'SHA-1' },
+            },
+            false,
+            usage,
+        );
+
+        return key;
+    } catch (e) {
+        console.error(e);
+    }
 }
 
 /**
