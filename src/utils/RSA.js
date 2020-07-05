@@ -13,13 +13,14 @@ function arrayBufferToBase64(arrayBuffer) {
 }
 
 function stringToArrayBuffer(byteString){
-    const byteArray = new Uint8Array(byteString.length);
+    const buffer = new ArrayBuffer(byteString.length);
+    const byteArray = new Uint8Array(buffer);
 
     for(let i = 0; i < byteString.length; i++) {
-        byteArray[i] = byteString.codePointAt(i);
+        byteArray[i] = byteString.charCodeAt(i);
     }
 
-    return byteArray;
+    return buffer;
 }
 
 function addNewLines(str) {
@@ -34,14 +35,9 @@ function addNewLines(str) {
 }
 
 function removeLines(pem) {
-    const lines = pem.split('\n');
-    let encodedString = '';
-
-    for(let i = 0; i < lines.length; i++) {
-        encodedString += lines[i].trim();
-    }
-
-    return encodedString;
+    const pemHeader = '-----BEGIN PUBLIC KEY-----';
+    const pemFooter = '-----END PUBLIC KEY-----';
+    return pem.substring(pemHeader.length, pem.length - pemFooter.length - 1);
 }
 
 /**
@@ -53,25 +49,26 @@ function removeLines(pem) {
  * @returns {Promise<CryptoKey>}
  */
 export async function importKey(pem, algorithm, usage) {
-    const keyPEM = removeLines(pem);
-    const keyBuffer = stringToArrayBuffer(keyPEM);
+    const pemEncodedKey = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAy3Xo3U13dc+xojwQYWoJLCbOQ5fOVY8LlnqcJm1W1BFtxIhOAJWohiHuIRMctv7dzx47TLlmARSKvTRjd0dF92jx/xY20Lz+DXp8YL5yUWAFgA3XkO3LSJgEOex10NB8jfkmgSb7QIudTVvbbUDfd5fwIBmCtaCwWx7NyeWWDb7A9cFxj7EjRdrDaK3ux/ToMLHFXVLqSL341TkCf4ZQoz96RFPUGPPLOfvN0x66CM1PQCkdhzjE6U5XGE964ZkkYUPPsy6Dcie4obhW4vDjgUmLzv0z7UD010RLIneUgDE2FqBfY/C+uWigNPBPkkQ+Bv/UigS6dHqTCVeD5wgyBQIDAQAB
+-----END PUBLIC KEY-----`;
+    const correct = removeLines(pemEncodedKey);
+    console.log(correct);
+    const contentPEM = removeLines(pem);
+    const binaryStr = window.atob(contentPEM);
+    const keyBuffer = stringToArrayBuffer(binaryStr);
+    const key = await window.crypto.subtle.importKey(
+        'spki',
+        keyBuffer,
+        {
+            name: algorithm,
+            hash: 'SHA-256',
+        },
+        true,
+        usage,
+    );
 
-    try {
-        const key = await window.crypto.subtle.importKey(
-            'spki',
-            keyBuffer,
-            {
-                name: algorithm,
-                hash: { name: 'SHA-1' },
-            },
-            false,
-            usage,
-        );
-
-        return key;
-    } catch (e) {
-        console.error(e);
-    }
+    return key;
 }
 
 /**

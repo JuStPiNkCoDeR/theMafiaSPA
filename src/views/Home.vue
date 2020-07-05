@@ -19,7 +19,6 @@
 
 <script>
   import Socket from '@/utils/socket';
-  import {importKey} from "@/utils/RSA";
 
   export default {
       name: 'Home',
@@ -42,26 +41,15 @@
                   foreignPemPSS = data['PSS'];
 
                   try {
-                      const keyOAEP = await importKey(foreignPemOAEP, 'RSA-OAEP', ['encrypt']);
+                      await this.$store.dispatch('secure/reproduceForeignPublicKeysFromPEM', {
+                          oaep: foreignPemOAEP,
+                          pss: foreignPemPSS,
+                      });
 
-                      const keyPSS = await importKey(foreignPemPSS, 'RSA-PSS', ['verify']);
-
-                      console.log(keyOAEP);
-                      console.log(keyPSS);
+                      sock.emit('rsa:setClientKeys', this.$store.state.secure.pemOAEP);
                   } catch (e) {
                       console.error(e);
                   }
-
-                  // try {
-                  //     await this.$store.dispatch('secure/reproduceForeignPublicKeysFromPEM', {
-                  //         oaep: foreignPemOAEP,
-                  //         pss: foreignPemPSS,
-                  //     });
-                  //
-                  //     sock.emit('rsa:setClientKeys', this.$store.state.secure.pemOAEP);
-                  // } catch (e) {
-                  //     console.error(e);
-                  // }
               });
 
               sock.init('secure');
