@@ -25,18 +25,17 @@
       methods: {
           async signIn(event) {
               event.preventDefault();
-
+              // Generates RSA key pair
               await this.$store.dispatch('secure/generateAllKeyPair');
 
               const sock = new Socket();
               let foreignPemOAEP, foreignPemPSS;
 
               sock.on('connect', () => {
-                  sock.emit('rsa:getServerKeys', '');
+                  sock.emit('rsa:getServerKeys');
               });
 
               sock.on('rsa:serverKeys', async (data) => {
-                  console.log(data)
                   foreignPemOAEP = data['OAEP'];
                   foreignPemPSS = data['PSS'];
 
@@ -46,10 +45,17 @@
                           pss: foreignPemPSS,
                       });
 
-                      sock.emit('rsa:setClientKeys', this.$store.state.secure.pemOAEP);
+                      sock.emit('rsa:setClientKeys', {
+                          oaep: this.$store.state.secure.pemOAEP,
+                          pss: this.$store.state.secure.pemPSS,
+                      });
                   } catch (e) {
                       console.error(e);
                   }
+              });
+
+              sock.on('rsa:acceptClientKeys', (data) => {
+                  console.log(data);
               });
 
               sock.init('secure');

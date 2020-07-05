@@ -34,10 +34,13 @@ function addNewLines(str) {
     return finalString;
 }
 
-function removeLines(pem) {
-    const pemHeader = '-----BEGIN PUBLIC KEY-----';
-    const pemFooter = '-----END PUBLIC KEY-----';
-    return pem.substring(pemHeader.length, pem.length - pemFooter.length - 1);
+/**
+ * @description Remove PEM type blocks
+ *
+ * @param {string} pem
+ */
+function removeHeaders(pem) {
+    return pem.split('\n').slice(1, -2).join('\n');
 }
 
 /**
@@ -49,12 +52,7 @@ function removeLines(pem) {
  * @returns {Promise<CryptoKey>}
  */
 export async function importKey(pem, algorithm, usage) {
-    const pemEncodedKey = `-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAy3Xo3U13dc+xojwQYWoJLCbOQ5fOVY8LlnqcJm1W1BFtxIhOAJWohiHuIRMctv7dzx47TLlmARSKvTRjd0dF92jx/xY20Lz+DXp8YL5yUWAFgA3XkO3LSJgEOex10NB8jfkmgSb7QIudTVvbbUDfd5fwIBmCtaCwWx7NyeWWDb7A9cFxj7EjRdrDaK3ux/ToMLHFXVLqSL341TkCf4ZQoz96RFPUGPPLOfvN0x66CM1PQCkdhzjE6U5XGE964ZkkYUPPsy6Dcie4obhW4vDjgUmLzv0z7UD010RLIneUgDE2FqBfY/C+uWigNPBPkkQ+Bv/UigS6dHqTCVeD5wgyBQIDAQAB
------END PUBLIC KEY-----`;
-    const correct = removeLines(pemEncodedKey);
-    console.log(correct);
-    const contentPEM = removeLines(pem);
+    const contentPEM = removeHeaders(pem);
     const binaryStr = window.atob(contentPEM);
     const keyBuffer = stringToArrayBuffer(binaryStr);
     const key = await window.crypto.subtle.importKey(

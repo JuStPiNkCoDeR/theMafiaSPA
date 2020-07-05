@@ -78,7 +78,18 @@ export default class {
             const input = JSON.parse(event.data);
 
             const eventName = input.name;
-            this.#listeners[eventName](JSON.parse(input.data), this.options, event);
+
+            let data;
+
+            try {
+                const parsed = JSON.parse(input.data);
+
+                data = parsed;
+            } catch (e) {
+                data = input.data;
+            }
+
+            this.#listeners[eventName](data, this.options, event);
         };
 
         this.#ws.onerror = (error) => {
@@ -97,7 +108,7 @@ export default class {
      *              2 -> options for current socket
      *              3 -> pure event object
      *
-     * @param {"connect"|"error"|"close"|"rsa:serverKeys"} event
+     * @param {"connect"|"error"|"close"|"rsa:serverKeys"|"rsa:acceptClientKeys"} event
      * @param {function(*, {port: number, uri: string, namespace: string}, MessageEvent): void} handler
      */
     on(event, handler) {
@@ -111,7 +122,7 @@ export default class {
      * @param {"rsa:getServerKeys"|"rsa:setClientKeys"} event
      * @param {*} data
      */
-    emit(event, data) {
+    emit(event, data = {}) {
         const out = {
             name: event,
             data
