@@ -50,12 +50,26 @@
                           pss: this.$store.state.secure.pemPSS,
                       });
                   } catch (e) {
+                      this.$store.commit('setError', {
+                         title: this.$ml.get('secureSocketEstablishmentError'),
+                         solution: this.$ml.get('secureSocketEstablishmentSolution'),
+                         error: e,
+                      });
                       console.error(e);
                   }
               });
 
               sock.on('rsa:acceptClientKeys', (data) => {
                   console.log(data);
+              });
+
+              sock.on('error', (error) => {
+                  this.$store.commit('setError', {
+                      title: this.$ml.get('secureSocketEstablishmentError'),
+                      solution: this.$ml.get('secureSocketEstablishmentSolution'),
+                      error,
+                  });
+                  console.error(error);
               });
 
               sock.init('secure');

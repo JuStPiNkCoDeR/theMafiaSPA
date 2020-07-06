@@ -9,8 +9,35 @@ Vue.use(Vuex)
 
 export default new Vuex.Store({
   state: {
+    /**
+     * @description Short information about error
+     *
+     * @type {string|null}
+     */
+    errorTitle: null,
+    /**
+     * @description The way to solve it for user
+     *
+     * @type {string|null}
+     */
+    errorSolution: null,
+    /**
+     * @description Error object for report
+     *
+     * @type {Error|null}
+     */
+    error: null,
   },
   mutations: {
+    /**
+     * @param state
+     * @param {{title: string, solution: string, error: Error}} payload
+     */
+    setError(state, payload) {
+      state.errorTitle = payload.title;
+      state.errorSolution = payload.solution;
+      state.error = payload.error;
+    }
   },
   actions: {
   },
