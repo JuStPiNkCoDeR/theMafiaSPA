@@ -3,14 +3,14 @@
     <form>
       <label>
         {{ $ml.get('nameLabel') }}
-        <input type="text" :placeholder="$ml.get('namePlaceholder')">
+        <input type="text" v-model.trim="name" :placeholder="$ml.get('namePlaceholder')">
       </label>
       <label>
         {{ $ml.get('passwordLabel') }}
-        <input type="password" :placeholder="$ml.get('passwordPlaceholder')">
+        <input type="password" v-model.trim="password" :placeholder="$ml.get('passwordPlaceholder')">
       </label>
       <div id="button-field">
-        <button @click="signIn">{{ $ml.get('signUp') }}</button>
+        <button @click="signUp">{{ $ml.get('signUp') }}</button>
         <button>{{ $ml.get('signIn') }}</button>
       </div>
     </form>
@@ -19,11 +19,18 @@
 
 <script>
   import Socket from '@/utils/socket';
+  import { encrypt, sign, arrayBufferToBase64 } from '@/utils/RSA';
 
   export default {
       name: 'Home',
+      data() {
+          return {
+              name: '',
+              password: '',
+          }
+      },
       methods: {
-          async signIn(event) {
+          async signUp(event) {
               event.preventDefault();
               // Generates RSA key pair
               await this.$store.dispatch('secure/generateAllKeyPair');
@@ -59,8 +66,26 @@
                   }
               });
 
-              sock.on('rsa:acceptClientKeys', (data) => {
-                  console.log(data);
+              sock.on('rsa:acceptClientKeys', async (data) => {
+                  if (data === "NO") {
+                      return;
+                  }
+
+                  try {
+                      const secretName = await encrypt(this.$store.state.secure.foreignPublicKeyOAEP, this.name);
+                      const secretPass = await encrypt(this.$store.state.secure.foreignPublicKeyOAEP, this.password);
+                      const nameSign = await sign(this.$store.state.secure.ownKeyPairPSS.privateKey, secretName)
+                      const passSign = await sign(this.$store.state.secure.ownKeyPairPSS.privateKey, secretPass)
+
+                      sock.emit("rsa:signUp", {
+                          name: arrayBufferToBase64(secretName),
+                          password: arrayBufferToBase64(secretPass),
+                          signPassword: arrayBufferToBase64(passSign),
+                          signName: arrayBufferToBase64(nameSign),
+                      });
+                  } catch (e) {
+                      console.error(e)
+                  }
               });
 
               sock.on('error', (error) => {

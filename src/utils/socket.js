@@ -119,7 +119,7 @@ export default class {
      * @description Trigger event on server with data
      * @throws Error
      *
-     * @param {"rsa:getServerKeys"|"rsa:setClientKeys"} event
+     * @param {"rsa:getServerKeys"|"rsa:setClientKeys"|"rsa:signUp"} event
      * @param {*} data
      */
     emit(event, data = {}) {

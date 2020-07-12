@@ -1,15 +1,8 @@
 // Copyright sasha.los.0148@gmail.com
 // All Rights have been taken by Mafia :)
 
-function arrayBufferToBase64(arrayBuffer) {
-    const byteArray = new Uint8Array(arrayBuffer);
-    let byteString = '';
-
-    for(let i = 0; i < byteArray.byteLength; i++) {
-        byteString += String.fromCharCode(byteArray[i]);
-    }
-
-    return window.btoa(byteString);
+export function arrayBufferToBase64(arrayBuffer) {
+    return window.btoa(new Uint8Array(arrayBuffer).reduce((s, b) => s + String.fromCharCode(b), ''));
 }
 
 function stringToArrayBuffer(byteString){
@@ -119,19 +112,17 @@ export async function getPEM(keyPair) {
 /**
  * @description Encrypt data using foreign public key
  *
- * @param {string} foreignPublicKey
+ * @param {CryptoKey} foreignPublicKey
  * @param {*} data
  *
  * @return {Promise<ArrayBuffer>}
  */
 export async function encrypt(foreignPublicKey, data) {
-    const key = await importKey(foreignPublicKey);
-
     const encrypted = await window.crypto.subtle.encrypt(
         {
             name: 'RSA-OAEP',
         },
-        key,
+        foreignPublicKey,
         stringToArrayBuffer(JSON.stringify(data)),
     );
 
