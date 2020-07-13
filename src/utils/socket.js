@@ -1,6 +1,9 @@
 // Copyright sasha.los.0148@gmail.com
 // All Rights have been taken by Mafia :)
 
+import {arrayBufferToBase64, encrypt, generateKeyPair, getPEM, importKey, sign} from '@/utils/RSA';
+import {guid} from "@/lib/helper";
+
 const PORT = 8001;
 // Uri for secure namespace
 const SECURE_SOCKET_URI = `ws://localhost:${PORT}/ws/secure`;
@@ -52,24 +55,72 @@ export default class {
      * @type {Object<string, function(*, {port: number, uri: string, namespace: string}, MessageEvent): void>}
      */
     #listeners = DEFAULT_LISTENERS;
+    /**
+     * @type {{pssPem: null|string, pss: null|CryptoKeyPair, oaepPem: null|string, oaep: null|CryptoKeyPair, foreignPemPss: null|string, foreignPemOaep: null|string, foreignOaep: null|CryptoKey, foreignPss: null|CryptoKey}}
+     */
+    #secureCredentials = {
+        oaep: null,
+        oaepPem: null,
+        pss: null,
+        pssPem: null,
+        foreignPemOaep: null,
+        foreignPemPss: null,
+        foreignOaep: null,
+        foreignPss: null,
+    }
 
     /**
-     * @description Establish new socket
+     * @description Start RSA handshake with server
      * @throws Error
      *
-     * @param {"secure"} namespace
+     * @param {function} onReady
+     *
+     * @return {Promise<void>}
      */
-    init(namespace) {
-        switch (namespace) {
-            case 'secure':
-                this.#ws = new WebSocket(SECURE_SOCKET_URI);
-                this.options.uri = SECURE_SOCKET_URI;
-                this.options.namespace = 'secure';
-                break
-            default:
-                throw Error("Unknown socket namespace")
-        }
+    async rsaHandshakeSetup(onReady = () => {}) {
+        // Generate own RSA keys
+        const keysOAEP = await generateKeyPair(true);
+        const pemOAEP = await getPEM(keysOAEP);
+        const keysPSS = await generateKeyPair(false);
+        const pemPSS = await getPEM(keysPSS);
 
+        this.#secureCredentials.oaep = keysOAEP;
+        this.#secureCredentials.oaepPem = pemOAEP;
+        this.#secureCredentials.pss = keysPSS;
+        this.#secureCredentials.pssPem = pemPSS;
+        // Send request for servers keys
+        this.on('connect', () => {
+            this.emit('rsa:getServerKeys');
+        });
+        // Set servers keys
+        this.on('rsa:serverKeys', async (data) => {
+            this.#secureCredentials.foreignPemOaep = data['OAEP'];
+            this.#secureCredentials.foreignPemPss = data['PSS'];
+
+            const keyOAEP = await importKey(data['OAEP'], 'RSA-OAEP', ['encrypt']);
+            const keyPSS = await importKey(data['PSS'], 'RSA-PSS', ['verify']);
+
+            this.#secureCredentials.foreignOaep = keyOAEP;
+            this.#secureCredentials.foreignPss = keyPSS;
+            // Send own public keys
+            this.emit('rsa:setClientKeys', {
+                oaep: this.#secureCredentials.oaepPem,
+                pss: this.#secureCredentials.pssPem,
+            });
+        });
+        // Server accepts clients keys
+        this.on('rsa:acceptClientKeys', async (data) => {
+            if (data === "NO") {
+                throw Error('Server cant accept clients keys');
+            }
+
+            console.log('[secure] handshake complete successfully!');
+
+            onReady();
+        });
+    }
+
+    setupMainEvents() {
         this.#ws.onopen = (event) => {
             this.#listeners.connect(event, this.options);
         };
@@ -102,13 +153,37 @@ export default class {
     }
 
     /**
+     * @description Establish new socket
+     * @throws Error
+     *
+     * @param {"secure"} namespace
+     * @param {function} onReady
+     */
+    async init(namespace, onReady = () => {}) {
+        switch (namespace) {
+            case 'secure':
+                await this.rsaHandshakeSetup(onReady);
+
+                this.#ws = new WebSocket(SECURE_SOCKET_URI);
+                this.options.uri = SECURE_SOCKET_URI;
+                this.options.namespace = 'secure';
+
+                break
+            default:
+                throw Error("Unknown socket namespace")
+        }
+
+        this.setupMainEvents();
+    }
+
+    /**
      * @description Add event handler to the current socket
      *              Handler get 3 params
      *              1 -> response data block from server
      *              2 -> options for current socket
      *              3 -> pure event object
      *
-     * @param {"connect"|"error"|"close"|"rsa:serverKeys"|"rsa:acceptClientKeys"} event
+     * @param {"connect"|"error"|"close"|"rsa:serverKeys"|"rsa:acceptClientKeys"|"rsa:signUp"} event
      * @param {function(*, {port: number, uri: string, namespace: string}, MessageEvent): void} handler
      */
     on(event, handler) {
@@ -121,9 +196,14 @@ export default class {
      *
      * @param {"rsa:getServerKeys"|"rsa:setClientKeys"|"rsa:signUp"} event
      * @param {*} data
+     *
+     * @return string
      */
-    emit(event, data = {}) {
+    emit(event, data = '') {
+        const reqID = guid();
+
         const out = {
+            reqID,
             name: event,
             data
         };
@@ -133,7 +213,37 @@ export default class {
         }
 
         this.#ws.send(JSON.stringify(out));
+
+        return reqID;
     }
+
+    /**
+     * @description Trigger event on server with encrypted data
+     * @throws Error
+     *
+     * @param {"rsa:signUp"} event
+     * @param {*} data
+     *
+     * @return string
+     */
+    async emitSecure(event, data = {}) {
+        if (this.#secureCredentials.foreignOaep === null || this.#secureCredentials.pss === null) {
+            throw Error('Encryption require RSA keys');
+        }
+
+        const encryptedData = {};
+
+        for (const [key, value] of Object.entries(data)) {
+            const encrypted = await encrypt(this.#secureCredentials.foreignOaep, value);
+            const signature = await sign(this.#secureCredentials.pss.privateKey, encrypted);
+
+            encryptedData[key] = arrayBufferToBase64(encrypted);
+            encryptedData[`${key}Sign`] = arrayBufferToBase64(signature);
+        }
+
+        return this.emit(event, encryptedData);
+    }
+
     /**
      * @description Close current socket
      * @throws Error
